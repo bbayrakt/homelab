@@ -1,0 +1,81 @@
+---
+- name: Update and reboot virtual servers
+  hosts: virtual_servers
+  tasks:
+    - name: Update system packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+      become: true
+
+    - name: Pull latest container images
+      community.docker.docker_compose_v2_pull:
+        project_src: "/home/{{ ansible_user }}"
+      when: "'container_host' in group_names"
+
+    - name: Stop containers
+      community.docker.docker_compose_v2:
+        project_src: "/home/{{ ansible_user }}"
+        state: stopped
+      when: "'container_host' in group_names"
+
+- name: Update and reboot Proxmox server
+  hosts: proxmox
+  vars_files: "{{ playbook_dir }}/vars/patching_vars.yml"
+  tasks:
+    - name: Update Proxmox packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+
+    - name: Shutdown virtual servers - LXC
+      community.general.proxmox:
+        vmid: "{{ item }}"
+        node: "{{ proxmox_node }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ proxmox_api_host }}"
+        state: stopped
+      loop: "{{ proxmox_vmids_lxc }}"
+      delegate_to: localhost
+
+    - name: Shutdown virtual servers - KVM 
+      community.general.proxmox_kvm:
+        vmid: "{{ item }}"
+        node: "{{ proxmox_node }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ proxmox_api_host }}"
+        timeout: 600
+        state: stopped
+      loop: "{{ proxmox_vmids_kvm }}"
+      delegate_to: localhost
+
+    - name: Reboot Proxmox server
+      ansible.builtin.reboot:
+
+    - name: Pause for 2 minutes for VM bootup
+      ansible.builtin.pause:
+        minutes: 2
+
+- name: Restore containers after Proxmox reboot
+  hosts: all
+  tasks:
+    - name: Wait for all container hosts to be available
+      ansible.builtin.wait_for:
+        host: "{{ hostvars[item]['ansible_host'] }}"
+        port: 21496
+        state: started
+        delay: 10
+        timeout: 300
+      loop: "{{ groups['container_host'] }}"
+
+- name: Start container
+  hosts: container_host
+  tasks:
+    - name: Start containers
+      community.docker.docker_compose_v2:
+        project_src: "/home/{{ ansible_user }}"
+        state: present
