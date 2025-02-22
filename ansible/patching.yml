@@ -28,7 +28,7 @@
         upgrade: dist
       when: '"proxmox" in group_names'
 
-    - name: Shutdown virtual servers - LXC
+    - name: Shutdown virtual servers - LXC # noqa: run-once[task]
       community.general.proxmox:
         vmid: "{{ item }}"
         node: "{{ proxmox_node }}"
@@ -41,7 +41,7 @@
       delegate_to: localhost
       run_once: true
 
-    - name: Shutdown virtual servers - KVM
+    - name: Shutdown virtual servers - KVM # noqa: run-once[task]
       community.general.proxmox_kvm:
         vmid: "{{ item }}"
         node: "{{ proxmox_node }}"
