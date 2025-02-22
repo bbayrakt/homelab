@@ -1,12 +1,14 @@
 ---
-- name: Update and reboot virtual servers
-  hosts: virtual_servers
+- name: Update Proxmox and VMs
+  hosts: all
+  vars_files: "{{ playbook_dir }}/vars/patching_vars.yml"
   tasks:
     - name: Update system packages
       ansible.builtin.apt:
         update_cache: true
         upgrade: dist
       become: true
+      when: '"virtual_servers" in group_names'
 
     - name: Pull latest container images
       community.docker.docker_compose_v2_pull:
@@ -19,14 +21,11 @@
         state: stopped
       when: "'container_host' in group_names"
 
-- name: Update and reboot Proxmox server
-  hosts: proxmox
-  vars_files: "{{ playbook_dir }}/vars/patching_vars.yml"
-  tasks:
     - name: Update Proxmox packages
       ansible.builtin.apt:
         update_cache: true
         upgrade: dist
+      when: '"proxmox" in group_names'
 
     - name: Shutdown virtual servers - LXC
       community.general.proxmox:
@@ -39,6 +38,7 @@
         state: stopped
       loop: "{{ proxmox_vmids_lxc }}"
       delegate_to: localhost
+      run_once: true
 
     - name: Shutdown virtual servers - KVM 
       community.general.proxmox_kvm:
@@ -52,30 +52,24 @@
         state: stopped
       loop: "{{ proxmox_vmids_kvm }}"
       delegate_to: localhost
+      run_once: true
 
     - name: Reboot Proxmox server
       ansible.builtin.reboot:
+      when: '"proxmox" in group_names'
 
-    - name: Pause for 2 minutes for VM bootup
-      ansible.builtin.pause:
-        minutes: 2
-
-- name: Restore containers after Proxmox reboot
-  hosts: all
-  tasks:
     - name: Wait for all container hosts to be available
       ansible.builtin.wait_for:
         host: "{{ hostvars[item]['ansible_host'] }}"
-        port: 21496
+        port: "{{ container_host_ssh_port }}"
         state: started
         delay: 10
         timeout: 300
       loop: "{{ groups['container_host'] }}"
+      delegate_to: localhost
 
-- name: Start container
-  hosts: container_host
-  tasks:
     - name: Start containers
       community.docker.docker_compose_v2:
         project_src: "/home/{{ ansible_user }}"
         state: present
+      when: "'container_host' in group_names"
