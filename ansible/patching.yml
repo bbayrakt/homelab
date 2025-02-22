@@ -2,6 +2,7 @@
 - name: Update Proxmox and VMs
   hosts: all
   vars_files: "{{ playbook_dir }}/vars/patching_vars.yml"
+  strategy: linear
   tasks:
     - name: Update system packages
       ansible.builtin.apt:
@@ -40,7 +41,7 @@
       delegate_to: localhost
       run_once: true
 
-    - name: Shutdown virtual servers - KVM 
+    - name: Shutdown virtual servers - KVM
       community.general.proxmox_kvm:
         vmid: "{{ item }}"
         node: "{{ proxmox_node }}"
