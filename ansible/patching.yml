@@ -26,10 +26,10 @@
       ansible.builtin.apt:
         update_cache: true
         upgrade: dist
-      when: '"proxmox" in group_names'
+      when: '"proxmox_host" in group_names'
 
     - name: Shutdown virtual servers - LXC # noqa: run-once[task]
-      community.general.proxmox:
+      community.proxmox.proxmox:
         vmid: "{{ item }}"
         node: "{{ proxmox_node }}"
         api_user: "{{ proxmox_api_user }}"
@@ -42,7 +42,7 @@
       run_once: true
 
     - name: Shutdown virtual servers - KVM # noqa: run-once[task]
-      community.general.proxmox_kvm:
+      community.proxmox.proxmox_kvm:
         vmid: "{{ item }}"
         node: "{{ proxmox_node }}"
         api_user: "{{ proxmox_api_user }}"
@@ -57,7 +57,7 @@
 
     - name: Reboot Proxmox server
       ansible.builtin.reboot:
-      when: '"proxmox" in group_names'
+      when: '"proxmox_host" in group_names'
 
     - name: Wait for all container hosts to be available
       ansible.builtin.wait_for:
